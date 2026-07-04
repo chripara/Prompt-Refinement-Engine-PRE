@@ -22,13 +22,22 @@ foundation is implemented so far:
 
 ---
 
-## Setup
+## Quick start
 
 ```cmd
 cd "C:\Projects\Prompt Renifinement Engine (PRE) with Sonet"
-python -m venv .venv
-.venv\Scripts\pip install -r requirements.txt
+python run.py
 ```
+
+First run auto-creates `.venv` and installs all dependencies (including the CUDA-enabled
+`llama-cpp-python` wheel). It also auto-adds Ollama's bundled CUDA runtime DLLs to `PATH`
+and auto-resolves `PRE_MODEL_PATH` from a local Ollama model (default `mistral:latest`)
+if you haven't set it yourself. Then starts the API at `http://localhost:8000`.
+
+Override before running if needed: `PRE_MODEL_PATH` (explicit GGUF path), `PRE_OLLAMA_MODEL`
+(which Ollama model to resolve), `PRE_GPU_LAYERS` (e.g. `0` to force CPU-only).
+
+## Manual setup
 
 ### Model
 
