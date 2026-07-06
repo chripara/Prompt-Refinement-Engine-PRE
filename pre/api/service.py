@@ -78,6 +78,7 @@ def create_app() -> FastAPI:
             "model_name": info.name,
             "quantization": info.quantization,
             "load_time_s": info.load_time_s,
+            "backend": info.backend,
         }
 
     @app.post("/refine")

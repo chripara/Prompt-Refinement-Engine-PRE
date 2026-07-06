@@ -35,9 +35,22 @@ def _valid_json() -> str:
     })
 
 
-def test_valid_first_response_returns_output(monkeypatch):
-    fake = _FakeLLM([_valid_json()])
+def _install_fake_llm(monkeypatch, responses) -> _FakeLLM:
+    fake = _FakeLLM(responses)
     monkeypatch.setattr(loader, "_llm", fake)
+    monkeypatch.setattr(
+        loader,
+        "_model_info",
+        loader.ModelInfo(
+            name="fake-model", path="fake.gguf", quantization="Q4_K_M",
+            load_time_s=0.0, n_gpu_layers=0, backend="cpu",
+        ),
+    )
+    return fake
+
+
+def test_valid_first_response_returns_output(monkeypatch):
+    fake = _install_fake_llm(monkeypatch, [_valid_json()])
 
     inp = RefineInput(text="A warrior at night", checkpoint="sdxl-base-1.0")
     output = inference.run_inference(inp, seed=42)
@@ -54,8 +67,7 @@ def test_valid_first_response_returns_output(monkeypatch):
 
 
 def test_invalid_then_valid_repairs_on_second_attempt(monkeypatch):
-    fake = _FakeLLM(["not json", _valid_json()])
-    monkeypatch.setattr(loader, "_llm", fake)
+    fake = _install_fake_llm(monkeypatch, ["not json", _valid_json()])
 
     inp = RefineInput(text="A mage at dawn", checkpoint="sdxl-base-1.0")
     output = inference.run_inference(inp, seed=7)
@@ -69,8 +81,7 @@ def test_invalid_then_valid_repairs_on_second_attempt(monkeypatch):
 
 
 def test_invalid_twice_raises_llm_output_invalid(monkeypatch):
-    fake = _FakeLLM(["not json", "still not json"])
-    monkeypatch.setattr(loader, "_llm", fake)
+    fake = _install_fake_llm(monkeypatch, ["not json", "still not json"])
 
     inp = RefineInput(text="A rogue at midnight", checkpoint="sdxl-base-1.0")
     with pytest.raises(PREError) as exc:
@@ -88,8 +99,7 @@ def test_literal_newline_in_string_value_is_repaired(monkeypatch):
         '{"positive_prompt": "Line one.\n\nLine two.", '
         '"negative_prompt": "blurry", "aspect_ratio": "16:9", "seed_strategy": "random"}'
     )
-    fake = _FakeLLM([raw_with_literal_newline])
-    monkeypatch.setattr(loader, "_llm", fake)
+    fake = _install_fake_llm(monkeypatch, [raw_with_literal_newline])
 
     inp = RefineInput(text="A rogue at midnight", checkpoint="sdxl-base-1.0")
     output = inference.run_inference(inp, seed=1)

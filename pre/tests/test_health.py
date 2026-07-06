@@ -25,3 +25,4 @@ def test_health_reports_loaded_model(monkeypatch):
     assert body["model_name"]
     assert body["quantization"] != "unknown"
     assert body["load_time_s"] > 0
+    assert body["backend"] in ("cpu", "gpu")
