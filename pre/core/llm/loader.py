@@ -16,6 +16,8 @@ from pre.core.errors import PREError
 
 MODEL_PATH_ENV = "PRE_MODEL_PATH"
 GPU_LAYERS_ENV = "PRE_GPU_LAYERS"
+N_CTX_ENV = "PRE_N_CTX"
+_DEFAULT_N_CTX = 4096
 
 # ggml_ftype enum -> human-readable quantization label (llama.cpp gguf.py).
 _FTYPE_LABELS = {
@@ -108,12 +110,16 @@ def load_model(model_path: str | None = None, n_gpu_layers: int | None = None) -
         env_value = os.environ.get(GPU_LAYERS_ENV)
         n_gpu_layers = int(env_value) if env_value is not None else -1
 
+    n_ctx_env = os.environ.get(N_CTX_ENV)
+    n_ctx = int(n_ctx_env) if n_ctx_env is not None else _DEFAULT_N_CTX
+
     from llama_cpp import Llama  # imported lazily: keeps import-time light for tests
 
     start = time.perf_counter()
     llm = Llama(
         model_path=str(model_file),
         n_gpu_layers=n_gpu_layers,
+        n_ctx=n_ctx,
         seed=0,
         verbose=False,
     )
