@@ -16,10 +16,10 @@ Define what the Prompt Refinement Engine SHALL do, measurably enough to build an
 ### 1.2 Scope
 Expand a short or long English user description into a **strictly-structured JSON** of model-specific prompts and parameters (positive/negative prompts, camera/composition/lighting/color tags, LoRA, ControlNet, aspect ratio, seed strategy) for the Image engine. Operates standalone (CLI/API) or as the stage between SSA and IMG. Out of scope: scene segmentation (SSA), image generation (IMG), multi-language.
 
-**v2 Architecture:** The expansion is performed by a **local LLM** running entirely on-device (no internet), guided by structured prompt templates and constrained to `temperature=0` with a **fixed seed** derived from the canonical input hash. This replaces the rule-based lexicon pipeline of v1 while preserving the determinism and offline guarantees.
+**v2 Architecture:** The expansion is performed by a **local LLM** running entirely on-device (no internet), guided by structured prompt templates and a **configurable sampling temperature** (`PRE_TEMPERATURE`, default > 0 — updated by US-PRE-E00-S05; the engine originally used `temperature=0` per US-PRE-E00-S03) combined with a **fixed seed** derived from the canonical input hash. A given seed always reproduces the same output at a given temperature; a *different* seed at the same temperature produces a genuine creative variation of the same prompt. This replaces the rule-based lexicon pipeline of v1 while preserving the determinism and offline guarantees.
 
 ### 1.3 Definitions
-**Refinement** — the deterministic transform from user text (+ optional SSA metadata) to the PRE output JSON, performed by a local LLM at temperature=0 with fixed seed. **Checkpoint** — the target image model the prompt is tuned for. **Preset** — a predefined style bundle. **Conflict resolution** — internal, silent selection of the higher-priority option when inputs disagree. **Canonical seed** — a 32-bit integer derived from the SHA-256 of the normalised input JSON; used as the LLM inference seed unless the user provides one explicitly.
+**Refinement** — the deterministic transform from user text (+ optional SSA metadata) to the PRE output JSON, performed by a local LLM at a fixed sampling temperature (`PRE_TEMPERATURE`) with a resolved seed — deterministic per (input, seed, temperature), not per input alone (US-PRE-E00-S05). **Checkpoint** — the target image model the prompt is tuned for. **Preset** — a predefined style bundle. **Conflict resolution** — internal, silent selection of the higher-priority option when inputs disagree. **Canonical seed** — a 32-bit integer derived from the SHA-256 of the normalised input JSON; used as the LLM inference seed unless the user provides one explicitly.
 
 ---
 
@@ -69,7 +69,7 @@ From the questionnaire: re-express user text into hyper-detailed, model-specific
 | **FR-PRE-009** | Support **LoRA fusion ≤ N (default 3)** with strengths and conflict detection. | Two-character-LoRA conflict detected; N configurable. | p1 |
 | **FR-PRE-010** | Manage **ControlNet lifecycle**: add when useful, strip when redundant, multi-CN, style-compatible. | Compatibility-matrix tests pass. | p1 |
 | **FR-PRE-011** | Propose **aspect ratio per scene** and **seed strategy** (reproducible for recurring characters). | Recurring character → same seed across scenes when SSA character id is stable. | mvp |
-| **FR-PRE-012** | Be **deterministic**: same input + same seed → same JSON. | Hash test on canonical JSON with fixed seed. | mvp |
+| **FR-PRE-012** | Be **deterministic**: same input + same seed + same temperature configuration → same JSON. A *different* seed at the same temperature must produce a different, valid variation (US-PRE-E00-S05). | Hash test on canonical JSON with fixed seed + fixed temperature; distinctness test across two seeds. | mvp |
 | **FR-PRE-013** | Run **100% offline** using a local LLM. | Network-off test passes; LLM inference uses no external calls. | mvp |
 | **FR-PRE-014** | Emit **structured decision logs** including the seed used. | Documented log schema; decisions and seed recorded. | mvp |
 | **FR-PRE-015** | **Validate/repair** malformed prompts; check LoRA/ControlNet availability; validate model compatibility. | Error catalog; repair-or-reject behavior. | mvp |
@@ -137,7 +137,7 @@ canonical_seed  = int(hashlib.sha256(canonical_input.encode()).hexdigest(), 16) 
 
 If the user supplies an explicit `seed` in the input, that value is used and the hash-derived seed is discarded.
 
-LLM inference is called with `temperature=0` and `seed=canonical_seed`. Same input + same model version + same seed → identical token sequence → identical JSON output. (FR-PRE-012 / NFR-001.)
+LLM inference is called with a configured sampling temperature (`PRE_TEMPERATURE`, default > 0) and `seed=canonical_seed` (or the user-supplied override). Same input + same model version + same seed + same temperature configuration → identical token sequence → identical JSON output. A *different* seed at the same temperature is expected to yield a *different* (but still schema-valid) generation — seed is a creative-variation control, not just a reproducibility token. (FR-PRE-012 / NFR-001, updated by US-PRE-E00-S05; US-PRE-E00-S03 originally fixed `temperature=0`, under which seed had no effect on output.)
 
 ---
 
@@ -154,7 +154,8 @@ Codes: `INVALID_INPUT`, `SCHEMA_VALIDATION_FAILED`, `RESOURCE_NOT_FOUND` (missin
 | FR-PRE-006 | Conflicting style + text | Fidelity wins; decision logged; no warning |
 | FR-PRE-009 | Two character LoRAs | Conflict detected; ≤ N enforced |
 | FR-PRE-010 | Redundant ControlNet | Stripped |
-| FR-PRE-012 | Same input twice (fixed seed) | Identical JSON (hash match) |
+| FR-PRE-012 | Same input twice (fixed seed + temperature) | Identical JSON (hash match) |
+| FR-PRE-012 | Same input, two different seeds (fixed temperature) | Different, valid JSON (distinct variation) |
 | FR-PRE-013 | Network blocked | Succeeds (local LLM, no external calls) |
 | FR-PRE-015 | Malformed input | Repaired or `INVALID_INPUT` |
 | FR-PRE-017 | Same canonical input | Same seed derived; user seed override echoed in output |
