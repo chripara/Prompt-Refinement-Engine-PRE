@@ -22,6 +22,7 @@ from pre.core.llm import loader
 from pre.core.logging import decision_log
 from pre.core.models.input import RefineInput
 from pre.core.models.output import SCHEMA_VERSION, LLMGeneratedFields, RefineOutput
+from pre.core.resource_loader import get_checkpoint_conventions
 
 MAX_TOKENS_ENV = "PRE_MAX_TOKENS"
 _DEFAULT_MAX_TOKENS = 512
@@ -37,12 +38,20 @@ _SYSTEM_PROMPT_TEMPLATE = (
     "'{checkpoint}' checkpoint: a rich, model-specific positive_prompt and a "
     "matching negative_prompt, plus camera/composition/lighting/color tags. "
     "Never contradict the user's stated scene; add only visually necessary "
-    "detail that the user did not explicitly rule out."
+    "detail that the user did not explicitly rule out.\n\n"
+    "Checkpoint-specific conventions for '{checkpoint}': {style_notes}\n"
+    "Default negative-prompt terms to include unless the scene contradicts "
+    "them: {negative_defaults}."
 )
 
 
 def _system_prompt(checkpoint: str) -> str:
-    return _SYSTEM_PROMPT_TEMPLATE.format(checkpoint=checkpoint)
+    conventions = get_checkpoint_conventions(checkpoint)
+    return _SYSTEM_PROMPT_TEMPLATE.format(
+        checkpoint=checkpoint,
+        style_notes=conventions["style_notes"],
+        negative_defaults=", ".join(conventions["negative_defaults"]),
+    )
 
 
 def _user_message(inp: RefineInput) -> str:

@@ -85,3 +85,39 @@ def test_seed_10_vs_seed_11_matches_user_acceptance_case():
     first_dump = seed_10_runs[0].output.model_dump()
     assert all(r.output.model_dump() == first_dump for r in seed_10_runs[1:])
     assert seed_11.output.positive_prompt != seed_10_runs[0].output.positive_prompt
+
+
+def test_checkpoint_specific_system_prompt_reaches_the_real_llm():
+    # US-PRE-E01-S01 AC: "LLM system prompt includes checkpoint name and its
+    # known token conventions." Empirically, asserting the *output* differs
+    # across checkpoints is unreliable: sdxl-base-1.0 and juggernaut-xl
+    # produced byte-identical positive_prompt for this seed/input even across
+    # separate fresh processes (no caching involved) — a general-purpose LLM
+    # at temperature=0.7 isn't guaranteed to meaningfully vary its wording
+    # based on stylistic system-prompt guidance alone. The fair, non-flaky
+    # signal is that the checkpoint-specific system prompt text is genuinely
+    # sent to the real model — spying on the live call rather than asserting
+    # on its (model-dependent) response content.
+    loader.load_model()
+    llm = loader.get_llm()
+    original_create_chat_completion = llm.create_chat_completion
+    captured: dict = {}
+
+    def _spy(**kwargs):
+        captured["messages"] = kwargs["messages"]
+        return original_create_chat_completion(**kwargs)
+
+    llm.create_chat_completion = _spy
+    try:
+        refine({
+            "text": "A lone warrior stands in a ruined castle at dusk",
+            "checkpoint": "juggernaut-xl",
+            "seed": 1,
+        })
+    finally:
+        llm.create_chat_completion = original_create_chat_completion
+
+    system_message = captured["messages"][0]["content"]
+    assert "juggernaut-xl" in system_message
+    assert "hotorealistic" in system_message  # from checkpoints.json style_notes
+    assert "cartoon" in system_message  # from checkpoints.json negative_defaults
