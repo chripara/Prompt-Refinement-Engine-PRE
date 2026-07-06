@@ -1,4 +1,4 @@
-"""US-PRE-E00-S03 — end-to-end refine() against the real local LLM.
+"""US-PRE-E00-S03/S05 — end-to-end refine() against the real local LLM.
 
 Skipped unless PRE_TEST_MODEL_PATH points at a real GGUF file.
 """
@@ -42,3 +42,46 @@ def test_same_input_and_explicit_seed_is_deterministic():
 
     assert first.output.model_dump() == second.output.model_dump()
     assert first.seed == second.seed == 123456
+
+
+def test_same_seed_repeated_five_times_is_always_identical():
+    # Exact user-specified acceptance case: seed=10, run 5 times in a row ->
+    # always the same output.
+    payload = {
+        "text": "A lone warrior stands in a ruined castle at dusk",
+        "checkpoint": "sdxl-base-1.0",
+        "seed": 10,
+    }
+    results = [refine(payload) for _ in range(5)]
+
+    assert all(r.seed == 10 for r in results)
+    first_dump = results[0].output.model_dump()
+    assert all(r.output.model_dump() == first_dump for r in results[1:])
+
+
+def test_different_seed_produces_different_variation():
+    base = {
+        "text": "A lone warrior stands in a ruined castle at dusk",
+        "checkpoint": "sdxl-base-1.0",
+    }
+    first = refine({**base, "seed": 111})
+    second = refine({**base, "seed": 222})
+
+    assert first.seed == 111
+    assert second.seed == 222
+    assert first.output.positive_prompt != second.output.positive_prompt
+
+
+def test_seed_10_vs_seed_11_matches_user_acceptance_case():
+    # Exact user-specified acceptance case: seed=10 repeated is stable;
+    # seed=11 on the same input must differ from it.
+    base = {
+        "text": "A lone warrior stands in a ruined castle at dusk",
+        "checkpoint": "sdxl-base-1.0",
+    }
+    seed_10_runs = [refine({**base, "seed": 10}) for _ in range(3)]
+    seed_11 = refine({**base, "seed": 11})
+
+    first_dump = seed_10_runs[0].output.model_dump()
+    assert all(r.output.model_dump() == first_dump for r in seed_10_runs[1:])
+    assert seed_11.output.positive_prompt != seed_10_runs[0].output.positive_prompt

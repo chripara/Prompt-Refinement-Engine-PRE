@@ -54,6 +54,15 @@ Bootstrap the local LLM, seed management, and inference contract that all other 
   - Environment variable `PRE_GPU_LAYERS` overrides auto-detection.
   - Latency logged per run (GPU path vs CPU path distinguishable in logs).
 
+### US-PRE-E00-S05: Configurable temperature for seed-driven variation
+- priority_weight: 96 · estimate: 1–2 d · phase: mvp
+- As an operator, I want a different `seed` at a fixed sampling temperature to produce a genuinely different variation of the same prompt (not the identical text every time), so that seed is a meaningful creative control rather than inert bookkeeping.
+- Acceptance criteria:
+  - Sampling temperature is configurable via `PRE_TEMPERATURE` (default > 0, not the `temperature=0` fixed by US-PRE-E00-S03); recorded per run in the decision log.
+  - At a fixed temperature, two different seeds over the same input produce different `positive_prompt`/`negative_prompt` text.
+  - Determinism (FR-PRE-012) is redefined as: same input + same seed + same temperature configuration → identical JSON output — a stronger/updated statement than the temperature=0-only guarantee from US-PRE-E00-S03, superseding it going forward without editing that story's historical record.
+  - `US-PRE-E00-S03` is left unmodified as a historical record of the initial temperature=0 decision; this story is the documented policy change (SRS_PRE_v2.md updated alongside).
+
 ---
 
 ## Epic E01 — Role in the pipeline

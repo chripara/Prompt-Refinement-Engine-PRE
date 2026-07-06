@@ -1,10 +1,13 @@
 """LLM inference contract (US-PRE-E00-S03, FR-PRE-001/002/003).
 
-Every call uses temperature=0 and the resolved canonical/explicit seed, and
-is constrained to return a single JSON object matching the PRE output
-schema. If the model's first response is not schema-valid JSON, one repair
-attempt is made with the parse/validation error fed back to the model;
-if that also fails, LLM_OUTPUT_INVALID is raised.
+Every call uses a configured sampling temperature (US-PRE-E00-S05;
+originally fixed at temperature=0 by US-PRE-E00-S03) and the resolved
+canonical/explicit seed, and is constrained to return a single JSON object
+matching the PRE output schema. At a fixed temperature, the same seed
+reproduces the same output and a different seed produces a different, valid
+variation of the same prompt. If the model's response is not schema-valid
+JSON, one repair attempt is made with the parse/validation error fed back to
+the model; if that also fails, LLM_OUTPUT_INVALID is raised.
 """
 from __future__ import annotations
 
@@ -22,6 +25,8 @@ from pre.core.models.output import SCHEMA_VERSION, LLMGeneratedFields, RefineOut
 
 MAX_TOKENS_ENV = "PRE_MAX_TOKENS"
 _DEFAULT_MAX_TOKENS = 512
+TEMPERATURE_ENV = "PRE_TEMPERATURE"
+_DEFAULT_TEMPERATURE = 0.7
 _MAX_ATTEMPTS = 2  # first attempt + one repair attempt
 
 _OUTPUT_JSON_SCHEMA = LLMGeneratedFields.model_json_schema()
@@ -56,6 +61,11 @@ def _user_message(inp: RefineInput) -> str:
 def _max_tokens() -> int:
     value = os.environ.get(MAX_TOKENS_ENV)
     return int(value) if value is not None else _DEFAULT_MAX_TOKENS
+
+
+def _temperature() -> float:
+    value = os.environ.get(TEMPERATURE_ENV)
+    return float(value) if value is not None else _DEFAULT_TEMPERATURE
 
 
 _JSON_ESCAPES = {"\n": "\\n", "\r": "\\r", "\t": "\\t"}
@@ -111,11 +121,13 @@ def run_inference(inp: RefineInput, seed: int) -> RefineOutput:
     last_error: Exception | None = None
     last_raw_text = ""
 
+    temperature = _temperature()
+
     for attempt in range(1, _MAX_ATTEMPTS + 1):
         # Reset the shared model's context before every generation. Without
         # this, reusing the same Llama instance across calls lets KV-cache/
         # prefix-reuse state leak between generations and breaks determinism
-        # (FR-PRE-012) even at temperature=0 with a fixed seed — confirmed by
+        # (FR-PRE-012) for a given (seed, temperature) pair — confirmed by
         # reproducing byte-identical output across repeated calls only once
         # reset() was added, on both CPU and GPU (CUDA) backends.
         llm.reset()
@@ -123,7 +135,7 @@ def run_inference(inp: RefineInput, seed: int) -> RefineOutput:
         start = time.perf_counter()
         completion = llm.create_chat_completion(
             messages=messages,
-            temperature=0,
+            temperature=temperature,
             seed=seed,
             max_tokens=_max_tokens(),
             response_format={"type": "json_object", "schema": _OUTPUT_JSON_SCHEMA},
@@ -146,6 +158,7 @@ def run_inference(inp: RefineInput, seed: int) -> RefineOutput:
             decision_log.record(
                 stage="inference",
                 seed=seed,
+                temperature=temperature,
                 checkpoint=inp.checkpoint,
                 attempt=attempt,
                 status="invalid_json",
@@ -166,6 +179,7 @@ def run_inference(inp: RefineInput, seed: int) -> RefineOutput:
         decision_log.record(
             stage="inference",
             seed=seed,
+            temperature=temperature,
             checkpoint=inp.checkpoint,
             attempt=attempt,
             status="ok",
