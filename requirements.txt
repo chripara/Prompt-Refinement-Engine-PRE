@@ -1,6 +1,12 @@
 pydantic>=2,<3
 fastapi>=0.110
 uvicorn[standard]>=0.29
-llama-cpp-python>=0.2.90
 pytest>=8
 httpx>=0.27
+
+# llama-cpp-python is intentionally NOT pinned here: run.py installs it
+# separately, choosing a CUDA-enabled wheel or a plain CPU-only wheel
+# depending on what this machine actually supports (US-PRE-E00-S04).
+# Installing it manually? Pick one:
+#   CPU-only:  pip install llama-cpp-python
+#   CUDA:      pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124

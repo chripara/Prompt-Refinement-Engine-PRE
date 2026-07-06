@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 
 from pydantic import ValidationError
 
@@ -130,6 +131,8 @@ def run_inference(inp: RefineInput, seed: int) -> RefineOutput:
         # reproducing byte-identical output across repeated calls only once
         # reset() was added, on both CPU and GPU (CUDA) backends.
         llm.reset()
+        backend = loader.get_model_info().backend
+        start = time.perf_counter()
         completion = llm.create_chat_completion(
             messages=messages,
             temperature=temperature,
@@ -137,6 +140,7 @@ def run_inference(inp: RefineInput, seed: int) -> RefineOutput:
             max_tokens=_max_tokens(),
             response_format={"type": "json_object", "schema": _OUTPUT_JSON_SCHEMA},
         )
+        latency_s = round(time.perf_counter() - start, 3)
         raw_text = completion["choices"][0]["message"]["content"]
         last_raw_text = raw_text
 
@@ -159,6 +163,8 @@ def run_inference(inp: RefineInput, seed: int) -> RefineOutput:
                 attempt=attempt,
                 status="invalid_json",
                 note=str(exc),
+                backend=backend,
+                latency_s=latency_s,
             )
             messages.append({"role": "assistant", "content": raw_text})
             messages.append({
@@ -177,6 +183,8 @@ def run_inference(inp: RefineInput, seed: int) -> RefineOutput:
             checkpoint=inp.checkpoint,
             attempt=attempt,
             status="ok",
+            backend=backend,
+            latency_s=latency_s,
         )
         return output
 

@@ -1,4 +1,5 @@
-"""Local GGUF model loading (US-PRE-E00-S01, FR-PRE-018).
+"""Local GGUF model loading (US-PRE-E00-S01, FR-PRE-018) and GPU/CPU
+runtime selection (US-PRE-E00-S04).
 
 Loads exactly once per process and is reused across all requests. The model
 path comes from the `PRE_MODEL_PATH` environment variable; startup fails fast
@@ -7,12 +8,14 @@ with `MODEL_NOT_FOUND` if the variable is unset or the file does not exist.
 from __future__ import annotations
 
 import os
+import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from pre.core.errors import PREError
+from pre.core.logging import decision_log
 
 MODEL_PATH_ENV = "PRE_MODEL_PATH"
 GPU_LAYERS_ENV = "PRE_GPU_LAYERS"
@@ -47,6 +50,7 @@ class ModelInfo:
     quantization: str
     load_time_s: float
     n_gpu_layers: int
+    backend: str  # "gpu" | "cpu" — see _resolve_backend()
 
 
 _llm: Any = None
@@ -80,6 +84,43 @@ def _resolve_quantization(metadata: dict[str, str], filename: str) -> str:
     return "unknown"
 
 
+def _gpu_available() -> bool:
+    """True if this llama-cpp-python build supports GPU offload AND an
+    NVIDIA GPU is actually present (build support alone isn't enough — a
+    CUDA-enabled wheel on a machine with no GPU should still fall back to
+    CPU cleanly rather than fail loading the model).
+    """
+    try:
+        import llama_cpp
+
+        if not llama_cpp.llama_supports_gpu_offload():
+            return False
+    except Exception:
+        return False
+
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "-L"],
+            capture_output=True, text=True, timeout=5,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0 and bool(result.stdout.strip())
+
+
+def _resolve_n_gpu_layers(explicit: int | None) -> int:
+    if explicit is not None:
+        return explicit
+    env_value = os.environ.get(GPU_LAYERS_ENV)
+    if env_value is not None:
+        return int(env_value)
+    return -1 if _gpu_available() else 0
+
+
+def _resolve_backend(n_gpu_layers: int) -> str:
+    return "cpu" if n_gpu_layers == 0 else "gpu"
+
+
 def load_model(model_path: str | None = None, n_gpu_layers: int | None = None) -> Any:
     """Load the GGUF model once; subsequent calls return the cached instance.
 
@@ -106,9 +147,8 @@ def load_model(model_path: str | None = None, n_gpu_layers: int | None = None) -
             details={"path": str(model_file)},
         )
 
-    if n_gpu_layers is None:
-        env_value = os.environ.get(GPU_LAYERS_ENV)
-        n_gpu_layers = int(env_value) if env_value is not None else -1
+    n_gpu_layers = _resolve_n_gpu_layers(n_gpu_layers)
+    backend = _resolve_backend(n_gpu_layers)
 
     n_ctx_env = os.environ.get(N_CTX_ENV)
     n_ctx = int(n_ctx_env) if n_ctx_env is not None else _DEFAULT_N_CTX
@@ -134,6 +174,14 @@ def load_model(model_path: str | None = None, n_gpu_layers: int | None = None) -
         quantization=_resolve_quantization(metadata, model_file.name),
         load_time_s=load_time_s,
         n_gpu_layers=n_gpu_layers,
+        backend=backend,
+    )
+
+    decision_log.record(
+        stage="model_load",
+        backend=backend,
+        n_gpu_layers=n_gpu_layers,
+        load_time_s=load_time_s,
     )
     return _llm
 
