@@ -57,6 +57,42 @@ def _max_tokens() -> int:
     return int(value) if value is not None else _DEFAULT_MAX_TOKENS
 
 
+_JSON_ESCAPES = {"\n": "\\n", "\r": "\\r", "\t": "\\t"}
+
+
+def _escape_control_chars_in_json_strings(text: str) -> str:
+    """Escape raw control characters (e.g. literal newlines) found inside
+    JSON string literals. Local LLMs generating long, multi-paragraph
+    string values frequently emit a literal newline instead of an escaped
+    "\\n" — invalid per the JSON spec (and rejected by pydantic's strict
+    parser) even though the intent is unambiguous. Structural whitespace
+    outside of strings is left untouched.
+    """
+    out: list[str] = []
+    in_string = False
+    escaped = False
+    for ch in text:
+        if in_string:
+            if escaped:
+                out.append(ch)
+                escaped = False
+            elif ch == "\\":
+                out.append(ch)
+                escaped = True
+            elif ch == '"':
+                in_string = False
+                out.append(ch)
+            elif ord(ch) < 0x20:
+                out.append(_JSON_ESCAPES.get(ch, f"\\u{ord(ch):04x}"))
+            else:
+                out.append(ch)
+        else:
+            if ch == '"':
+                in_string = True
+            out.append(ch)
+    return "".join(out)
+
+
 def run_inference(inp: RefineInput, seed: int) -> RefineOutput:
     """Call the local LLM under the deterministic contract and return validated output.
 
@@ -93,7 +129,8 @@ def run_inference(inp: RefineInput, seed: int) -> RefineOutput:
         last_raw_text = raw_text
 
         try:
-            generated = LLMGeneratedFields.model_validate_json(raw_text)
+            sanitized_text = _escape_control_chars_in_json_strings(raw_text)
+            generated = LLMGeneratedFields.model_validate_json(sanitized_text)
             output = RefineOutput(
                 schema_version=SCHEMA_VERSION,
                 checkpoint=inp.checkpoint,

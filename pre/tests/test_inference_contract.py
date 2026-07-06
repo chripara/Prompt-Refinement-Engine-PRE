@@ -78,3 +78,21 @@ def test_invalid_twice_raises_llm_output_invalid(monkeypatch):
 
     assert exc.value.code == "LLM_OUTPUT_INVALID"
     assert len(fake.calls) == 2
+
+
+def test_literal_newline_in_string_value_is_repaired(monkeypatch):
+    # Local LLMs writing long, multi-paragraph strings sometimes emit a raw
+    # newline instead of an escaped "\n" — invalid JSON per spec, but an
+    # unambiguous, auto-repairable formatting slip, not a real schema error.
+    raw_with_literal_newline = (
+        '{"positive_prompt": "Line one.\n\nLine two.", '
+        '"negative_prompt": "blurry", "aspect_ratio": "16:9", "seed_strategy": "random"}'
+    )
+    fake = _FakeLLM([raw_with_literal_newline])
+    monkeypatch.setattr(loader, "_llm", fake)
+
+    inp = RefineInput(text="A rogue at midnight", checkpoint="sdxl-base-1.0")
+    output = inference.run_inference(inp, seed=1)
+
+    assert output.positive_prompt == "Line one.\n\nLine two."
+    assert len(fake.calls) == 1  # repaired without needing the retry attempt
