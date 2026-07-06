@@ -4,20 +4,27 @@ Usage (from CMD, no activation needed):
     cd "C:\\Projects\\Prompt Renifinement Engine (PRE) with Sonet"
     python run.py
 
-First run: creates .venv and installs all dependencies (including the
-CUDA-enabled llama-cpp-python wheel) automatically.
+First run: creates .venv, installs the base dependencies, then detects
+whether this machine has a usable CUDA runtime (an NVIDIA GPU present AND
+the CUDA 12.x runtime DLLs locatable — e.g. via a local Ollama install) and
+installs the matching llama-cpp-python wheel: CUDA-enabled if so, plain
+CPU-only PyPI wheel otherwise. This matters because a CUDA-linked llama.dll
+fails to even *import* without those runtime DLLs on PATH, regardless of
+the n_gpu_layers setting — so picking the wrong wheel breaks the app
+entirely rather than just running slower.
 Subsequent runs: boots straight into the venv.
 
 Before starting the server this also:
-  - adds Ollama's bundled CUDA 12 runtime DLLs to PATH, if Ollama is
-    installed, so the CUDA wheel can load without a full CUDA Toolkit;
+  - adds Ollama's bundled CUDA 12 runtime DLLs to PATH, if present, so a
+    CUDA-enabled install can load without a full CUDA Toolkit;
   - auto-resolves PRE_MODEL_PATH from a local Ollama model (default
     "mistral:latest") if PRE_MODEL_PATH is not already set.
 
 Override via environment variables before running, if needed:
     PRE_MODEL_PATH      explicit path to a GGUF file (skips Ollama lookup)
     PRE_OLLAMA_MODEL    which Ollama model to resolve (default: mistral:latest)
-    PRE_GPU_LAYERS      forwarded to llama-cpp-python (-1 = all layers on GPU)
+    PRE_GPU_LAYERS      forwarded to llama-cpp-python (-1 = all layers on GPU,
+                        0 = CPU-only); auto-detected if unset (US-PRE-E00-S04)
 
 Starts:
   FastAPI REST API  ->  http://localhost:8000
@@ -33,11 +40,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-# ---------------------------------------------------------------------------
-# Bootstrap: ensure we are running inside the project venv.
-# If not, create it (once), install deps, and re-exec via venv Python.
-# ---------------------------------------------------------------------------
-
 ROOT = Path(__file__).parent.resolve()
 VENV = ROOT / ".venv"
 REQUIREMENTS = ROOT / "requirements.txt"
@@ -49,6 +51,7 @@ VENV_PYTHON = (
 )
 
 LLAMA_CPP_CUDA_INDEX = "https://abetlen.github.io/llama-cpp-python/whl/cu124"
+_CUDART_DLL_NAME = "cudart64_12.dll"
 
 
 def _in_venv() -> bool:
@@ -57,6 +60,65 @@ def _in_venv() -> bool:
         sys.prefix != sys.base_prefix
         or os.environ.get("VIRTUAL_ENV") is not None
     )
+
+
+def _find_ollama_cuda_dir() -> Path | None:
+    candidates = [
+        Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Ollama" / "lib" / "ollama" / "cuda_v12",
+        Path("C:/Program Files/Ollama/lib/ollama/cuda_v12"),
+    ]
+    for candidate in candidates:
+        if candidate.is_dir():
+            return candidate
+    return None
+
+
+def _cudart_locatable() -> Path | None:
+    """Find a directory containing the CUDA 12 runtime DLL, checking
+    CUDA_PATH, a local Ollama install, and the current PATH — without
+    requiring the full CUDA Toolkit to be installed.
+    """
+    candidates: list[Path] = []
+    cuda_path = os.environ.get("CUDA_PATH")
+    if cuda_path:
+        candidates.append(Path(cuda_path) / "bin")
+    ollama_dir = _find_ollama_cuda_dir()
+    if ollama_dir:
+        candidates.append(ollama_dir)
+    candidates += [Path(p) for p in os.environ.get("PATH", "").split(os.pathsep) if p]
+
+    for directory in candidates:
+        if (directory / _CUDART_DLL_NAME).is_file():
+            return directory
+    return None
+
+
+def _detect_cuda_runtime_available() -> bool:
+    """True only if an NVIDIA GPU is present AND the CUDA runtime DLLs are
+    locatable somewhere — both are required for a CUDA-linked llama.dll to
+    even load, let alone benefit from GPU offload.
+    """
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "-L"], capture_output=True, text=True, timeout=5,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+    if result.returncode != 0 or not result.stdout.strip():
+        return False
+    return _cudart_locatable() is not None
+
+
+def _install_llama_cpp_python(pip: str) -> None:
+    if _detect_cuda_runtime_available():
+        print("[PRE] CUDA runtime detected — installing GPU-enabled llama-cpp-python ...")
+        subprocess.check_call([
+            pip, "-m", "pip", "install", "--quiet",
+            "llama-cpp-python", "--extra-index-url", LLAMA_CPP_CUDA_INDEX,
+        ])
+    else:
+        print("[PRE] No usable CUDA runtime detected — installing CPU-only llama-cpp-python ...")
+        subprocess.check_call([pip, "-m", "pip", "install", "--quiet", "llama-cpp-python"])
 
 
 def _bootstrap() -> None:
@@ -72,17 +134,13 @@ def _bootstrap() -> None:
         [pip, "-m", "pip", "install", "--quiet", "--upgrade", "pip"]
     )
     if REQUIREMENTS.exists():
-        subprocess.check_call([
-            pip, "-m", "pip", "install", "--quiet",
-            "-r", str(REQUIREMENTS),
-            "--extra-index-url", LLAMA_CPP_CUDA_INDEX,
-        ])
+        subprocess.check_call([pip, "-m", "pip", "install", "--quiet", "-r", str(REQUIREMENTS)])
     else:
         subprocess.check_call([
             pip, "-m", "pip", "install", "--quiet",
             "pydantic>=2,<3", "fastapi>=0.110", "uvicorn[standard]>=0.29",
-            "llama-cpp-python", "--extra-index-url", LLAMA_CPP_CUDA_INDEX,
         ])
+    _install_llama_cpp_python(pip)
     print("[PRE] Dependencies ready.")
 
     # subprocess + sys.exit instead of os.execv — execv splits on spaces on Windows.
@@ -101,17 +159,6 @@ if not _in_venv():
 # ---------------------------------------------------------------------------
 
 import uvicorn  # noqa: E402
-
-
-def _find_ollama_cuda_dir() -> Path | None:
-    candidates = [
-        Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Ollama" / "lib" / "ollama" / "cuda_v12",
-        Path("C:/Program Files/Ollama/lib/ollama/cuda_v12"),
-    ]
-    for candidate in candidates:
-        if candidate.is_dir():
-            return candidate
-    return None
 
 
 def _resolve_model_path_from_ollama(model_name: str) -> str | None:
@@ -137,8 +184,8 @@ def _configure_environment() -> None:
         print(f"[PRE] CUDA runtime DLLs found via Ollama: {cuda_dir}")
     else:
         print("[PRE] No bundled CUDA runtime found (Ollama not detected on the "
-              "default install path) — GPU load may fail unless the CUDA Toolkit "
-              "is on PATH, or set PRE_GPU_LAYERS=0 to force CPU-only.")
+              "default install path). If llama-cpp-python was installed CPU-only, "
+              "this is expected and fine.")
 
     if not os.environ.get("PRE_MODEL_PATH"):
         model_name = os.environ.get("PRE_OLLAMA_MODEL", "mistral:latest")
