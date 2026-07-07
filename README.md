@@ -33,9 +33,13 @@ Full story-level detail (including in-review PRs) in
 
 ## Development methodology
 
-This project is built by **product-owner-directed AI-agent orchestration**, not
-freehand vibe-coding — that's a deliberate part of what it demonstrates, alongside the
-code itself:
+This project exists to demonstrate a specific, separate skill: **directing and reviewing
+AI-agent-driven implementation as a product owner**, aimed at roles where coding agents
+do the implementation and a human drives scope, architecture, and review — including,
+longer-term, building RAG systems the same way. That is a distinct skill from hand-written
+coding, which I demonstrate elsewhere; this repo is not trying to be that.
+
+Concretely, that means:
 
 1. **I** write the spec: [`SRS_PRE_v2.md`](SRS_PRE_v2.md) (FR/NFR, use cases) and
    [`EPICS_AND_STORIES_v2.md`](EPICS_AND_STORIES_v2.md) (epics, user stories, acceptance
@@ -53,6 +57,19 @@ code itself:
    against what it actually changed and how it was verified — not just a diff.
 
 Only I merge PRs into `main`; the agent proposes, I decide.
+
+### Where scope changes are recorded
+
+[`EPICS_AND_STORIES_v2.md`](EPICS_AND_STORIES_v2.md) is the **pre-dev plan** — written
+before implementation, not rewritten after the fact to match whatever happened. Scope that
+changes *during* implementation (a story turns out to need more than planned, a decision
+gets reversed once its actual root cause is understood, a fix belongs in the same PR as an
+unrelated small ask) is recorded in that PR's description and its commit's `Summary` /
+`Changes` section, not backfilled into the plan document — the same way a Jira ticket gets
+a closing comment explaining what actually shipped versus the original ticket text, rather
+than the ticket itself being silently edited to look right in hindsight. Requirements
+drift during real implementation; that's expected here exactly as it is on any team, solo
+or not — the git history is the source of truth for what changed and why, not the plan.
 
 ---
 
