@@ -1,24 +1,33 @@
-# Prompt Refinement Engine (PRE) — v2
+# Prompt Refinement Engine (PRE)
 
-Local-LLM prompt expansion for image-generation pipelines. See [`SRS_PRE_v2.md`](SRS_PRE_v2.md)
-for the full spec and [`EPICS_AND_STORIES_v2.md`](EPICS_AND_STORIES_v2.md) for the backlog.
+**Local-LLM prompt expansion for image-generation pipelines** — turns a short scene
+description into a hyper-detailed, model-specific, deterministic Stable Diffusion / SDXL
+prompt (positive + negative prompt, camera/composition/lighting/color tags, LoRA,
+ControlNet, aspect ratio, seed) as strict JSON, entirely offline via a local GGUF model
+(Mistral/Llama-class, via [`llama-cpp-python`](https://github.com/abetlen/llama-cpp-python)) —
+no OpenAI/cloud calls. Python 3.11, FastAPI REST API, Windows-first with GPU (CUDA) or
+CPU-only auto-detection.
 
-**Deterministic · Offline · Local LLM (GGUF via `llama-cpp-python`) · No cloud calls**
+🚧 **Actively in development** — built story-by-story against
+[`EPICS_AND_STORIES_v2.md`](EPICS_AND_STORIES_v2.md) with one PR per story (see the commit
+history / PR descriptions for the engineering decisions behind each one, not just the diff).
+
+See [`SRS_PRE_v2.md`](SRS_PRE_v2.md) for the full spec.
+
+**Deterministic · Offline · Local LLM (GGUF) · No cloud calls · Prompt engineering for Stable Diffusion / SDXL**
 
 ---
 
 ## Status
 
-Rebuilt from scratch against the v2 (local-LLM) architecture. Only the LLM runtime
-foundation is implemented so far:
+| Epic | Stories done | Status |
+|------|---------------|--------|
+| E00 — LLM Runtime (model loading, seed determinism, inference contract, GPU/CPU auto-detect, temperature) | 5 / 5 | ✅ complete |
+| E01 — Role in the pipeline (checkpoint-specific expansion, standalone/pipeline modes, fidelity) | 1 / 5 | 🚧 in progress |
+| E02 – E10 (inputs, JSON output, style, camera, negatives, LoRA/ControlNet, seeds, performance, validation) | 0 / N | ⏳ not started |
 
-| Story | Title | Status |
-|-------|-------|--------|
-| US-PRE-E00-S01 | Local LLM model loading | done |
-| US-PRE-E00-S02 | Canonical seed derivation | done |
-| US-PRE-E00-S03 | LLM inference contract | done |
-| US-PRE-E00-S04 | GPU / CPU runtime support | done |
-| US-PRE-E01-S01 | Hyper-detailed SDXL-oriented prompts | pending |
+Full story-level detail (including in-review PRs) in
+[`EPICS_AND_STORIES_v2.md`](EPICS_AND_STORIES_v2.md).
 
 ---
 
