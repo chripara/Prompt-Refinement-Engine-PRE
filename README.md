@@ -31,6 +31,47 @@ Full story-level detail (including in-review PRs) in
 
 ---
 
+## Development methodology
+
+This project exists to demonstrate a specific, separate skill: **directing and reviewing
+AI-agent-driven implementation as a product owner** — a human drives scope, architecture,
+and review while a coding agent implements. That is distinct from hand-written coding,
+which I demonstrate elsewhere; this repo is not trying to be that.
+
+Concretely, that means:
+
+1. **I** write the spec: [`SRS_PRE_v2.md`](SRS_PRE_v2.md) (FR/NFR, use cases) and
+   [`EPICS_AND_STORIES_v2.md`](EPICS_AND_STORIES_v2.md) (epics, user stories, acceptance
+   criteria, priority/estimate per story).
+2. Claude Code implements **one story per branch, one PR per story** — never more than
+   one story's worth of scope in a single PR.
+3. **I** review every PR, test the running API manually (Swagger/Insomnia, real local
+   LLM), and decide product/architecture tradeoffs when they come up mid-implementation —
+   e.g. choosing CPU-only vs. GPU when they first appeared to trade off speed against
+   bit-exact determinism (later resolved in the same PR once the actual root cause —
+   a KV-cache reset bug, not GPU nondeterminism — was found and fixed), or deciding that
+   seed should drive creative variation via a configurable sampling temperature rather
+   than staying inert at `temperature=0`.
+4. Commit messages carry a `Summary` / `Changes` / `Tests` body so every PR is reviewable
+   against what it actually changed and how it was verified — not just a diff.
+
+Only I merge PRs into `main`; the agent proposes, I decide.
+
+### Where scope changes are recorded
+
+[`EPICS_AND_STORIES_v2.md`](EPICS_AND_STORIES_v2.md) is the **pre-dev plan** — written
+before implementation, not rewritten after the fact to match whatever happened. Scope that
+changes *during* implementation (a story turns out to need more than planned, a decision
+gets reversed once its actual root cause is understood, a fix belongs in the same PR as an
+unrelated small ask) is recorded in that PR's description and its commit's `Summary` /
+`Changes` section, not backfilled into the plan document — the same way a Jira ticket gets
+a closing comment explaining what actually shipped versus the original ticket text, rather
+than the ticket itself being silently edited to look right in hindsight. Requirements
+drift during real implementation; that's expected here exactly as it is on any team, solo
+or not — the git history is the source of truth for what changed and why, not the plan.
+
+---
+
 ## Quick start
 
 ```cmd
