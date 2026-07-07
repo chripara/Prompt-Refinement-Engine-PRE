@@ -34,10 +34,9 @@ Full story-level detail (including in-review PRs) in
 ## Development methodology
 
 This project exists to demonstrate a specific, separate skill: **directing and reviewing
-AI-agent-driven implementation as a product owner**, aimed at roles where coding agents
-do the implementation and a human drives scope, architecture, and review — including,
-longer-term, building RAG systems the same way. That is a distinct skill from hand-written
-coding, which I demonstrate elsewhere; this repo is not trying to be that.
+AI-agent-driven implementation as a product owner** — a human drives scope, architecture,
+and review while a coding agent implements. That is distinct from hand-written coding,
+which I demonstrate elsewhere; this repo is not trying to be that.
 
 Concretely, that means:
 
