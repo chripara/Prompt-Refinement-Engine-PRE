@@ -31,6 +31,31 @@ Full story-level detail (including in-review PRs) in
 
 ---
 
+## Development methodology
+
+This project is built by **product-owner-directed AI-agent orchestration**, not
+freehand vibe-coding — that's a deliberate part of what it demonstrates, alongside the
+code itself:
+
+1. **I** write the spec: [`SRS_PRE_v2.md`](SRS_PRE_v2.md) (FR/NFR, use cases) and
+   [`EPICS_AND_STORIES_v2.md`](EPICS_AND_STORIES_v2.md) (epics, user stories, acceptance
+   criteria, priority/estimate per story).
+2. Claude Code implements **one story per branch, one PR per story** — never more than
+   one story's worth of scope in a single PR.
+3. **I** review every PR, test the running API manually (Swagger/Insomnia, real local
+   LLM), and decide product/architecture tradeoffs when they come up mid-implementation —
+   e.g. choosing CPU-only vs. GPU when they first appeared to trade off speed against
+   bit-exact determinism (later resolved in the same PR once the actual root cause —
+   a KV-cache reset bug, not GPU nondeterminism — was found and fixed), or deciding that
+   seed should drive creative variation via a configurable sampling temperature rather
+   than staying inert at `temperature=0`.
+4. Commit messages carry a `Summary` / `Changes` / `Tests` body so every PR is reviewable
+   against what it actually changed and how it was verified — not just a diff.
+
+Only I merge PRs into `main`; the agent proposes, I decide.
+
+---
+
 ## Quick start
 
 ```cmd
