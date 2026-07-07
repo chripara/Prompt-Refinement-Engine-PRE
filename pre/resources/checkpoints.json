@@ -1,0 +1,18 @@
+{
+  "sdxl-base-1.0": {
+    "style_notes": "Standard SDXL baseline. Favor concise, comma-separated descriptive tags appended after the main sentence (e.g. 'cinematic lighting, intricate details, 8k'). Common SDXL quality boosters like 'masterpiece, best quality' are effective when appropriate.",
+    "negative_defaults": ["low quality", "blurry", "watermark", "extra limbs", "deformed"]
+  },
+  "sdxl-turbo": {
+    "style_notes": "Fast single/few-step SDXL variant. Keep prompts shorter and punchier; avoid excessive tag stacking — turbo models respond better to concise, direct phrasing than long comma-separated tag lists.",
+    "negative_defaults": ["low quality", "blurry", "watermark"]
+  },
+  "dreamshaper-xl": {
+    "style_notes": "Creative/fantasy-oriented checkpoint. Lean into vivid, imaginative, painterly descriptors; fantasy lighting and atmospheric mood terms work especially well.",
+    "negative_defaults": ["low quality", "blurry", "watermark", "extra limbs", "deformed", "bad anatomy"]
+  },
+  "juggernaut-xl": {
+    "style_notes": "Photorealistic checkpoint. Favor photographic terminology: camera/lens references, realistic lighting descriptions, skin and material texture detail; avoid painterly or illustration language.",
+    "negative_defaults": ["low quality", "blurry", "watermark", "cartoon", "illustration", "3d render", "extra limbs", "deformed"]
+  }
+}

@@ -117,3 +117,18 @@ def test_literal_newline_in_string_value_is_repaired(monkeypatch):
 
     assert output.positive_prompt == "Line one.\n\nLine two."
     assert len(fake.calls) == 1  # repaired without needing the retry attempt
+
+
+def test_system_prompt_is_checkpoint_specific():
+    sdxl_prompt = inference._system_prompt("sdxl-base-1.0")
+    juggernaut_prompt = inference._system_prompt("juggernaut-xl")
+
+    assert "sdxl-base-1.0" in sdxl_prompt
+    assert "juggernaut-xl" in juggernaut_prompt
+    assert sdxl_prompt != juggernaut_prompt
+
+
+def test_system_prompt_falls_back_for_unknown_checkpoint():
+    prompt = inference._system_prompt("some-checkpoint-nobody-registered")
+
+    assert "some-checkpoint-nobody-registered" in prompt
